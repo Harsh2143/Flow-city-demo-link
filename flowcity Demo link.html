@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowCity — Predictive Crowd Intelligence</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg:#f4f6fb; --white:#ffffff; --surface:#eef1f8; --border:#e0e5f0;
+    --text:#1a1f36; --muted:#7b87a6;
+    --low:#10b981; --low-bg:#ecfdf5; --low-border:#a7f3d0;
+    --medium:#f59e0b; --medium-bg:#fffbeb; --medium-border:#fde68a;
+    --high:#ef4444; --high-bg:#fef2f2; --high-border:#fecaca;
+    --critical:#dc2626; --critical-bg:#fde8e8; --critical-border:#fca5a5;
+    --accent:#3b6ef0; --accent-bg:#eff4ff; --accent-light:#dbeafe;
+    --shadow-sm:0 1px 4px rgba(26,31,54,.07);
+    --shadow:0 4px 16px rgba(26,31,54,.10);
+    --shadow-lg:0 8px 32px rgba(26,31,54,.13);
+    --r:14px; --rs:8px;
+    --font:'Outfit',sans-serif; --mono:'JetBrains Mono',monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+
+  /* TOPBAR */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:58px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0;box-shadow:var(--shadow-sm);z-index:1000;gap:12px;}
+  .logo{display:flex;align-items:center;gap:9px;flex-shrink:0;}
+  .logo-icon{width:34px;height:34px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 8px rgba(59,110,240,.3);}
+  .logo-name{font-size:17px;font-weight:800;letter-spacing:-.5px;}
+  .logo-tag{font-size:9px;color:var(--muted);font-weight:500;letter-spacing:.5px;text-transform:uppercase;}
+  .city-select{padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:var(--font);font-size:12px;font-weight:600;color:var(--text);background:var(--bg);cursor:pointer;outline:none;transition:border-color .2s;}
+  .city-select:focus{border-color:var(--accent);}
+  .view-switcher{display:flex;background:var(--surface);border-radius:11px;padding:3px;gap:2px;border:1px solid var(--border);}
+  .view-btn{padding:6px 15px;border-radius:8px;border:none;background:transparent;color:var(--muted);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;}
+  .view-btn.active{background:var(--white);color:var(--accent);box-shadow:var(--shadow-sm);}
+  .topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+  .weather-pill{display:flex;align-items:center;gap:5px;background:var(--accent-bg);border:1px solid var(--accent-light);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--accent);}
+  .live-pill{display:flex;align-items:center;gap:5px;background:var(--low-bg);border:1px solid var(--low-border);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--low);cursor:default;}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--low);animation:blink 1.5s infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--surface);padding:4px 10px;border-radius:7px;border:1px solid var(--border);}
+
+  /* AI BADGE in topbar */
+  .ai-badge{display:flex;align-items:center;gap:5px;background:linear-gradient(135deg,#eff4ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:20px;padding:4px 11px;font-size:11px;font-weight:700;color:#4338ca;white-space:nowrap;}
+  .ai-dot{width:6px;height:6px;border-radius:50%;background:#6366f1;animation:blink 2s infinite;}
+
+  /* LAYOUT */
+  .main{display:flex;flex:1;overflow:hidden;}
+
+  /* SIDEBAR */
+  .sidebar{width:288px;flex-shrink:0;background:var(--white);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+  .sb-header{padding:13px 13px 9px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .sb-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;}
+  .search{width:100%;padding:8px 12px 8px 32px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%237b87a6' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:10px center;}
+  .search:focus{border-color:var(--accent);}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;padding:8px 13px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .chip{padding:4px 10px;border-radius:20px;border:1.5px solid var(--border);background:var(--white);color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;}
+  .chip:hover{border-color:var(--accent);color:var(--accent);}
+  .chip.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .event-list{overflow-y:auto;flex:1;padding:7px;}
+  .event-list::-webkit-scrollbar{width:3px;}
+  .event-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+  /* LIVE TICKER in sidebar */
+  .live-ticker{background:linear-gradient(135deg,#fef9ff,#f0fdf4);border-bottom:1px solid var(--border);padding:7px 13px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);flex-shrink:0;}
+  .ticker-dot{width:5px;height:5px;border-radius:50%;background:var(--low);animation:blink 1.5s infinite;flex-shrink:0;}
+  .ticker-text{font-weight:600;color:var(--text);font-family:var(--mono);font-size:10px;}
+
+  .event-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--r);padding:11px;margin-bottom:6px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow-sm);}
+  .event-card:hover{border-color:var(--accent);box-shadow:var(--shadow);transform:translateY(-1px);}
+  .event-card.active{border-color:var(--accent);background:var(--accent-bg);}
+  .ec-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;}
+  .ec-name{font-size:13px;font-weight:700;line-height:1.3;flex:1;margin-right:8px;}
+  .ec-venue{font-size:11px;color:var(--muted);margin-top:2px;font-weight:500;}
+  .badge{padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;flex-shrink:0;font-family:var(--mono);}
+  .badge.low{background:var(--low-bg);color:var(--low);}
+  .badge.medium{background:var(--medium-bg);color:var(--medium);}
+  .badge.high{background:var(--high-bg);color:var(--high);}
+  .badge.critical{background:var(--critical-bg);color:var(--critical);}
+  .ec-footer{display:flex;justify-content:space-between;align-items:center;margin-top:6px;}
+  .ec-score{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .ec-visitors{font-size:11px;font-weight:600;color:var(--muted);}
+  .ec-trend{font-size:11px;font-weight:700;}
+
+  /* MAP */
+  .map-wrap{flex:1;position:relative;}
+  #map{width:100%;height:100%;}
+  .map-legend{position:absolute;bottom:24px;left:16px;z-index:800;background:var(--white);border:1px solid var(--border);border-radius:var(--rs);padding:10px 12px;box-shadow:var(--shadow);font-size:11px;}
+  .legend-title{font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-size:9px;margin-bottom:7px;}
+  .legend-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
+  .legend-dot{width:10px;height:10px;border-radius:50%;}
+  .legend-label{font-size:11px;font-weight:500;}
+
+  /* TECH STACK badge on map */
+  .map-tech-badge{position:absolute;top:12px;left:12px;z-index:800;background:rgba(255,255,255,.95);border:1px solid var(--border);border-radius:10px;padding:8px 12px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:4px;}
+  .mtb-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:2px;}
+  .mtb-row{display:flex;gap:5px;flex-wrap:wrap;}
+  .mtb-tag{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;border:1px solid;}
+
+  /* FOOTFALL COUNTER on map */
+  .map-footfall{position:absolute;top:12px;right:12px;z-index:800;background:rgba(255,255,255,.95);border:1px solid var(--border);border-radius:10px;padding:9px 14px;box-shadow:var(--shadow);text-align:center;}
+  .mf-num{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent);line-height:1;}
+  .mf-lbl{font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+  .mf-sub{font-size:9px;color:var(--low);font-weight:600;margin-top:1px;}
+
+  /* RIGHT PANEL */
+  .right-panel{width:305px;flex-shrink:0;background:var(--white);border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;}
+  .right-panel::-webkit-scrollbar{width:3px;}
+  .right-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+  .rp-sec{padding:13px 13px 11px;border-bottom:1px solid var(--border);}
+  .rp-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:10px;}
+
+  /* AI MODEL PANEL */
+  .ai-panel{background:linear-gradient(135deg,#f0f4ff,#ede9fe);border:1.5px solid #c7d2fe;border-radius:var(--r);padding:12px;margin-bottom:0;}
+  .ai-panel-title{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;color:#3730a3;margin-bottom:10px;}
+  .ai-model-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .ai-model-name{font-size:11px;font-weight:600;color:#4338ca;}
+  .ai-model-val{font-family:var(--mono);font-size:11px;font-weight:700;color:#3730a3;background:#e0e7ff;padding:2px 7px;border-radius:8px;}
+  .ai-acc-bar{height:5px;background:#e0e7ff;border-radius:4px;overflow:hidden;margin-bottom:8px;}
+  .ai-acc-fill{height:100%;background:linear-gradient(90deg,#6366f1,#8b5cf6);border-radius:4px;transition:width .8s ease;}
+  .ai-sources{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
+  .ai-src{font-size:9px;padding:2px 7px;border-radius:8px;background:#e0e7ff;color:#4338ca;font-weight:600;border:1px solid #c7d2fe;}
+
+  /* STAMPEDE ALERT */
+  .stampede-alert{background:#fff1f1;border:1.5px solid #fca5a5;border-radius:var(--rs);padding:10px 12px;margin-bottom:4px;display:flex;align-items:flex-start;gap:9px;}
+  .stampede-icon{font-size:18px;flex-shrink:0;margin-top:1px;}
+  .stampede-title{font-size:12px;font-weight:700;color:var(--critical);margin-bottom:3px;}
+  .stampede-msg{font-size:11px;color:#b91c1c;line-height:1.5;}
+
+  /* SCORE */
+  .score-block{display:flex;align-items:center;gap:13px;margin-bottom:4px;}
+  .score-ring{width:68px;height:68px;position:relative;flex-shrink:0;}
+  .score-ring svg{position:absolute;inset:0;transform:rotate(-90deg);}
+  .score-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:19px;font-weight:700;}
+  .score-level{font-size:17px;font-weight:800;margin-bottom:3px;}
+  .score-sub{font-size:11px;color:var(--muted);font-weight:500;}
+  .trend-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;margin-top:5px;}
+  .trend-up{background:#fef2f2;color:var(--high);}
+  .trend-stable{background:#fffbeb;color:var(--medium);}
+  .trend-down{background:var(--low-bg);color:var(--low);}
+
+  /* 2HR FORECAST */
+  .forecast-bar{display:flex;gap:3px;align-items:flex-end;height:48px;margin-bottom:5px;}
+  .fc-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end;}
+  .fc-bar{width:100%;border-radius:3px 3px 0 0;min-height:4px;transition:height .5s ease;}
+  .fc-lbl{font-size:9px;color:var(--muted);font-family:var(--mono);}
+  .fc-now{font-size:9px;color:var(--accent);font-family:var(--mono);font-weight:700;}
+
+  /* SIGNALS */
+  .sig-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .sig-name{font-size:11px;color:var(--muted);width:105px;font-weight:500;flex-shrink:0;}
+  .sig-track{flex:1;height:5px;background:var(--surface);border-radius:4px;overflow:hidden;}
+  .sig-fill{height:100%;border-radius:4px;transition:width .6s ease;}
+  .sig-val{font-size:11px;font-family:var(--mono);color:var(--muted);width:22px;text-align:right;}
+
+  /* TIME */
+  .time-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
+  .time-slot{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--rs);padding:7px 4px;text-align:center;cursor:pointer;transition:all .15s;}
+  .time-slot.best{border-color:var(--low);background:var(--low-bg);}
+  .ts-t{font-family:var(--mono);font-size:11px;font-weight:600;}
+  .ts-l{font-size:10px;font-weight:600;margin-top:2px;}
+  .ts-tag{font-size:9px;color:var(--low);font-weight:700;margin-top:2px;}
+
+  /* PARKING */
+  .park-item{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:var(--rs);margin-bottom:5px;border:1px solid var(--border);}
+  .park-name{font-size:12px;font-weight:600;}
+  .park-dist{font-size:10px;color:var(--muted);margin-top:1px;}
+  .park-tag{font-size:10px;font-weight:700;padding:3px 7px;border-radius:10px;font-family:var(--mono);}
+  .park-tag.avail{background:var(--low-bg);color:var(--low);}
+  .park-tag.limited{background:var(--medium-bg);color:var(--medium);}
+  .park-tag.full{background:var(--high-bg);color:var(--high);}
+
+  /* ALTS */
+  .alt-item{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:var(--rs);margin-bottom:5px;cursor:pointer;border:1.5px solid transparent;transition:all .15s;}
+  .alt-item:hover{border-color:var(--accent);background:var(--accent-bg);}
+  .alt-name{font-size:12px;font-weight:600;}
+  .alt-venue{font-size:10px;color:var(--muted);}
+
+  /* EMPTY */
+  .empty{padding:40px 20px;text-align:center;color:var(--muted);flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .empty-icon{font-size:42px;margin-bottom:12px;}
+  .empty-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;}
+  .empty-msg{font-size:12px;line-height:1.6;}
+
+  /* AUTHORITY */
+  .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+  .stat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--rs);padding:10px;text-align:center;}
+  .stat-num{font-family:var(--mono);font-size:22px;font-weight:700;}
+  .stat-lbl{font-size:9px;color:var(--muted);font-weight:600;margin-top:2px;text-transform:uppercase;letter-spacing:.5px;}
+  .alert-card{border-radius:var(--rs);padding:11px;margin-bottom:7px;background:var(--bg);border:1px solid var(--border);border-left:4px solid var(--high);}
+  .alert-card.watch{border-left-color:var(--medium);}
+  .alert-card.clear{border-left-color:var(--low);}
+  .alert-card.info{border-left-color:var(--accent);}
+  .al-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+  .al-loc{font-size:13px;font-weight:700;}
+  .al-time{font-size:10px;font-family:var(--mono);color:var(--muted);}
+  .al-msg{font-size:12px;color:var(--muted);line-height:1.5;}
+  .al-action{margin-top:6px;font-size:11px;color:var(--accent);font-weight:600;}
+  .override-box{background:var(--accent-bg);border:1.5px solid var(--accent-light);border-radius:var(--r);padding:12px;}
+  .ov-title{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--accent);}
+  .ov-input{width:100%;background:var(--white);border:1.5px solid var(--border);border-radius:var(--rs);padding:8px 10px;font-family:var(--font);font-size:12px;color:var(--text);resize:none;outline:none;margin-bottom:8px;}
+  .ov-input:focus{border-color:var(--accent);}
+  .ov-btn{width:100%;background:var(--accent);border:none;border-radius:var(--rs);padding:9px;color:#fff;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;}
+  .ov-btn:hover{opacity:.9;}
+
+  /* ORGANIZER */
+  .chart-bars{display:flex;align-items:flex-end;gap:4px;height:86px;margin-bottom:5px;}
+  .bc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;height:100%;}
+  .bf{width:100%;border-radius:3px 3px 0 0;min-height:4px;}
+  .bl{font-size:9px;color:var(--muted);font-family:var(--mono);}
+  .meter-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .meter-name{font-size:12px;font-weight:600;width:95px;}
+  .meter-track{flex:1;height:6px;background:var(--surface);border-radius:4px;overflow:hidden;}
+  .meter-fill{height:100%;border-radius:4px;}
+  .meter-pct{font-size:11px;font-family:var(--mono);width:32px;text-align:right;font-weight:600;}
+
+  /* TOOLTIP */
+  .leaflet-tooltip{background:var(--white)!important;border:1px solid var(--border)!important;color:var(--text)!important;font-family:var(--font)!important;font-size:12px!important;border-radius:10px!important;padding:8px 12px!important;box-shadow:var(--shadow)!important;}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--text);color:#fff;border-radius:12px;padding:12px 22px;font-size:13px;font-weight:500;z-index:9999;transition:transform .3s ease;pointer-events:none;white-space:nowrap;box-shadow:var(--shadow-lg);}
+  .toast.show{transform:translateX(-50%) translateY(0);}
+
+  /* PULSE ANIMATION for live numbers */
+  @keyframes numPulse{0%{opacity:1}50%{opacity:.6}100%{opacity:1}}
+  .num-pulse{animation:numPulse .6s ease-in-out;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🌊</div>
+    <div>
+      <div class="logo-name">FlowCity</div>
+      <div class="logo-tag">Predictive Crowd Intelligence</div>
+    </div>
+  </div>
+
+  <select class="city-select" id="citySelect" onchange="changeCity(this.value)">
+    <option value="pune">📍 Pune</option>
+    <option value="mumbai">📍 Mumbai</option>
+    <option value="nagpur">📍 Nagpur</option>
+    <option value="nashik">📍 Nashik</option>
+  </select>
+
+  <div class="view-switcher">
+    <button class="view-btn active" onclick="setView('citizen',this)">👤 Citizen</button>
+    <button class="view-btn" onclick="setView('authority',this)">🏛️ Authority</button>
+    <button class="view-btn" onclick="setView('organizer',this)">📋 Organizer</button>
+  </div>
+
+  <div class="topbar-right">
+    <!-- FIX 1: AI Badge visible in topbar -->
+    <div class="ai-badge"><div class="ai-dot"></div>AI · XGBoost · 89% Acc.</div>
+    <div class="weather-pill" id="weatherPill">☀️ Clear · 29°C · High footfall risk</div>
+    <div class="live-pill"><div class="live-dot"></div>Live · <span id="totalVisitors" style="font-family:var(--mono);margin-left:2px">6.8L</span></div>
+    <div class="clock" id="clock">--:--</div>
+  </div>
+</div>
+
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-header">
+      <div class="sb-title" id="sbTitle">Events &amp; Pandals — Pune</div>
+      <input class="search" id="searchBox" placeholder="Search event or venue..." oninput="filterSearch(this.value)"/>
+    </div>
+    <div class="chips" id="chipsRow">
+      <button class="chip active" onclick="setFilter('all',this)">All</button>
+      <button class="chip" onclick="setFilter('ganapati',this)">🪔 Ganapati</button>
+      <button class="chip" onclick="setFilter('navratri',this)">🎭 Navratri</button>
+      <button class="chip" onclick="setFilter('holi',this)">🎨 Holi</button>
+      <button class="chip" onclick="setFilter('concert',this)">🎵 Concert</button>
+      <button class="chip" onclick="setFilter('cricket',this)">🏏 Cricket</button>
+    </div>
+    <!-- FIX 2: Live ticker -->
+    <div class="live-ticker">
+      <div class="ticker-dot"></div>
+      <span class="ticker-text" id="tickerText">Dagdusheth: 96 · Kasba: 91 · Holi KP: 88</span>
+    </div>
+    <div class="event-list" id="eventList"></div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-wrap">
+    <div id="map"></div>
+
+   
+
+    <!-- FIX 4: Live footfall counter on map -->
+    <div class="map-footfall">
+      <div class="mf-num" id="mapFootfall">6,82,450</div>
+      <div class="mf-lbl">Est. City Footfall</div>
+      <div class="mf-sub" id="mapFootfallTrend">↑ updating live</div>
+    </div>
+
+    <div class="map-legend">
+      <div class="legend-title">Crowd Level</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#10b981"></div><div class="legend-label">Low</div></div>
+      <div class="legend-row"><div class="legend-dot" style="background:#f59e0b"></div><div class="legend-label">Medium</div></div>
+      <div class="legend-row"><div class="legend-dot" style="background:#ef4444"></div><div class="legend-label">High</div></div>
+      <div class="legend-row" style="margin-bottom:0"><div class="legend-dot" style="background:#dc2626"></div><div class="legend-label">Critical</div></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel" id="rightPanel">
+    <div class="empty">
+      <div class="empty-icon">📍</div>
+      <div class="empty-title">Select an Event</div>
+      <div class="empty-msg">Tap any event on the left or a pin on the map to see live crowd prediction, 2-hour forecast, and parking.</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const RELIGIOUS_TYPES = ['ganapati','navratri','holi'];
+
+// ── CITY DATA ─────────────────────────────────────────────────
+const CITY_DATA = {
+  pune: {
+    center:[18.527,73.855], zoom:13,
+    weather:'☀️ Clear · 29°C · High footfall risk',
+    footfall:'6,82,450',
+    events:[
+      {id:1,name:"Kasba Ganpati",type:"ganapati",venue:"Kasba Peth, Pune",lat:18.5167,lng:73.8553,
+       crowd:"critical",score:91,visitors:42800,wait:"60+ min",trend:"up",stampede:true,
+       forecast:[45,55,68,80,91,96,94,85],
+       parking:[{name:"PMC Parking Lot A",dist:"280m",status:"full"},{name:"Shaniwar Wada Lot",dist:"600m",status:"limited"}],
+       alts:[2,5],signals:{popular:92,traffic:88,historical:95,weather:85},
+       times:[{t:"6AM",l:"low",best:true},{t:"9AM",l:"low",best:false},{t:"12PM",l:"medium",best:false},{t:"3PM",l:"high",best:false},{t:"6PM",l:"critical",best:false},{t:"9PM",l:"critical",best:false}]},
+      {id:2,name:"Tambdi Jogeshwari",type:"ganapati",venue:"Tambdi Jogeshwari Peth",lat:18.5185,lng:73.8572,
+       crowd:"medium",score:52,visitors:18200,wait:"15 min",trend:"stable",stampede:false,
+       forecast:[20,28,35,40,52,58,62,55],
+       parking:[{name:"Peth Market Parking",dist:"150m",status:"avail"},{name:"Street Parking",dist:"50m",status:"avail"}],
+       alts:[5,4],signals:{popular:55,traffic:48,historical:60,weather:85},
+       times:[{t:"6AM",l:"low",best:true},{t:"9AM",l:"low",best:false},{t:"12PM",l:"low",best:false},{t:"3PM",l:"medium",best:false},{t:"6PM",l:"medium",best:false},{t:"9PM",l:"high",best:false}]},
+      {id:3,name:"Dagdusheth Ganpati",type:"ganapati",venue:"Budhwar Peth, Central Pune",lat:18.5146,lng:73.8562,
+       crowd:"critical",score:96,visitors:68000,wait:"75 min",trend:"up",stampede:true,
+       forecast:[50,62,75,85,92,96,97,95],
+       parking:[{name:"Kelkar Museum Lot",dist:"400m",status:"full"},{name:"PMC Lot B",dist:"700m",status:"limited"}],
+       alts:[2,5],signals:{popular:98,traffic:95,historical:98,weather:85},
+       times:[{t:"6AM",l:"low",best:true},{t:"9AM",l:"medium",best:false},{t:"12PM",l:"high",best:false},{t:"3PM",l:"high",best:false},{t:"6PM",l:"critical",best:false},{t:"9PM",l:"critical",best:false}]},
+      {id:4,name:"Guruji Talim Ganpati",type:"ganapati",venue:"Kasba Peth",lat:18.5172,lng:73.8539,
+       crowd:"high",score:74,visitors:29500,wait:"35 min",trend:"stable",stampede:false,
+       forecast:[30,38,48,58,68,74,78,72],
+       parking:[{name:"Nearby Street",dist:"100m",status:"limited"},{name:"Chhatrapati Market",dist:"350m",status:"avail"}],
+       alts:[2,5],signals:{popular:75,traffic:70,historical:80,weather:85},
+       times:[{t:"6AM",l:"low",best:true},{t:"9AM",l:"low",best:false},{t:"12PM",l:"medium",best:false},{t:"3PM",l:"high",best:false},{t:"6PM",l:"high",best:false},{t:"9PM",l:"critical",best:false}]},
+      {id:5,name:"Tulshibaug Ganpati",type:"ganapati",venue:"Sadashiv Peth, Pune",lat:18.5129,lng:73.8571,
+       crowd:"low",score:28,visitors:7200,wait:"No wait",trend:"down",stampede:false,
+       forecast:[35,30,25,22,28,32,38,30],
+       parking:[{name:"Phule Market Parking",dist:"200m",status:"avail"},{name:"Tulshibaug Road",dist:"80m",status:"avail"}],
+       alts:[2,4],signals:{popular:30,traffic:25,historical:35,weather:85},
+       times:[{t:"6AM",l:"low",best:false},{t:"9AM",l:"low",best:false},{t:"12PM",l:"low",best:true},{t:"3PM",l:"low",best:false},{t:"6PM",l:"medium",best:false},{t:"9PM",l:"high",best:false}]},
+      {id:6,name:"Navratri Garba — FC Road",type:"navratri",venue:"FC Road Grounds, Pune",lat:18.5290,lng:73.8400,
+       crowd:"high",score:80,visitors:32000,wait:"30 min",trend:"up",stampede:false,
+       forecast:[10,15,30,50,70,80,88,85],
+       parking:[{name:"FC Road Lot",dist:"200m",status:"limited"},{name:"Apte Road Parking",dist:"400m",status:"avail"}],
+       alts:[7,8],signals:{popular:82,traffic:75,historical:78,weather:85},
+       times:[{t:"6PM",l:"medium",best:false},{t:"7PM",l:"high",best:false},{t:"8PM",l:"high",best:false},{t:"9PM",l:"critical",best:false},{t:"10PM",l:"high",best:false},{t:"11PM",l:"medium",best:true}]},
+      {id:7,name:"Navratri Garba — MIT Campus",type:"navratri",venue:"MIT College Ground, Kothrud",lat:18.5040,lng:73.8067,
+       crowd:"medium",score:58,visitors:21000,wait:"20 min",trend:"stable",stampede:false,
+       forecast:[5,10,22,40,55,58,62,55],
+       parking:[{name:"MIT Campus Parking",dist:"100m",status:"avail"},{name:"Kothrud Market",dist:"500m",status:"avail"}],
+       alts:[8],signals:{popular:60,traffic:52,historical:58,weather:85},
+       times:[{t:"6PM",l:"low",best:true},{t:"7PM",l:"medium",best:false},{t:"8PM",l:"medium",best:false},{t:"9PM",l:"high",best:false},{t:"10PM",l:"medium",best:false},{t:"11PM",l:"low",best:false}]},
+      {id:8,name:"Navratri Garba — Balewadi",type:"navratri",venue:"Balewadi Sports Complex",lat:18.5697,lng:73.7762,
+       crowd:"low",score:32,visitors:9800,wait:"5 min",trend:"stable",stampede:false,
+       forecast:[8,12,20,28,32,38,40,35],
+       parking:[{name:"Sports Complex Lot",dist:"50m",status:"avail"},{name:"Balewadi Road",dist:"150m",status:"avail"}],
+       alts:[7],signals:{popular:35,traffic:28,historical:32,weather:85},
+       times:[{t:"6PM",l:"low",best:true},{t:"7PM",l:"low",best:false},{t:"8PM",l:"medium",best:false},{t:"9PM",l:"medium",best:false},{t:"10PM",l:"low",best:false},{t:"11PM",l:"low",best:false}]},
+      {id:9,name:"Holi Festival — Koregaon Park",type:"holi",venue:"Lane 5, Koregaon Park",lat:18.5380,lng:73.8960,
+       crowd:"critical",score:88,visitors:51000,wait:"45 min",trend:"up",stampede:false,
+       forecast:[20,35,55,70,82,88,90,82],
+       parking:[{name:"KP Street Parking",dist:"150m",status:"full"},{name:"Phoenix Mall",dist:"700m",status:"limited"}],
+       alts:[10],signals:{popular:88,traffic:85,historical:82,weather:90},
+       times:[{t:"8AM",l:"low",best:true},{t:"9AM",l:"medium",best:false},{t:"10AM",l:"high",best:false},{t:"11AM",l:"critical",best:false},{t:"12PM",l:"critical",best:false},{t:"2PM",l:"high",best:false}]},
+      {id:10,name:"Holi Mela — Shivajinagar",type:"holi",venue:"Sambhaji Park, Shivajinagar",lat:18.5308,lng:73.8474,
+       crowd:"medium",score:55,visitors:19500,wait:"15 min",trend:"stable",stampede:false,
+       forecast:[15,25,38,48,55,58,55,45],
+       parking:[{name:"Sambhaji Park Lot",dist:"100m",status:"avail"},{name:"FC Road Side",dist:"350m",status:"avail"}],
+       alts:[9],signals:{popular:55,traffic:50,historical:52,weather:90},
+       times:[{t:"8AM",l:"low",best:true},{t:"9AM",l:"low",best:false},{t:"10AM",l:"medium",best:false},{t:"11AM",l:"medium",best:false},{t:"12PM",l:"high",best:false},{t:"2PM",l:"medium",best:false}]},
+      {id:11,name:"IPL Match · MCA Stadium",type:"cricket",venue:"Gahunje, Pune",lat:18.6488,lng:73.7497,
+       crowd:"high",score:78,visitors:38000,wait:"45 min",trend:"up",stampede:false,
+       forecast:[20,30,45,60,72,78,75,60],
+       parking:[{name:"Stadium Lot P1",dist:"50m",status:"full"},{name:"Overflow Lot P2",dist:"400m",status:"limited"}],
+       alts:[],signals:{popular:80,traffic:78,historical:75,weather:85},
+       times:[{t:"12PM",l:"low",best:true},{t:"2PM",l:"medium",best:false},{t:"4PM",l:"high",best:false},{t:"6PM",l:"critical",best:false},{t:"8PM",l:"high",best:false},{t:"10PM",l:"medium",best:false}]},
+      {id:12,name:"NH7 Weekender",type:"concert",venue:"Mahalaxmi Lawns, Magarpatta",lat:18.5148,lng:73.9283,
+       crowd:"medium",score:55,visitors:17800,wait:"20 min",trend:"stable",stampede:false,
+       forecast:[10,20,32,40,50,55,60,55],
+       parking:[{name:"On-site Lot A",dist:"100m",status:"avail"},{name:"Magarpatta Annexe",dist:"500m",status:"avail"}],
+       alts:[],signals:{popular:58,traffic:50,historical:55,weather:85},
+       times:[{t:"2PM",l:"low",best:true},{t:"4PM",l:"medium",best:false},{t:"6PM",l:"medium",best:false},{t:"8PM",l:"high",best:false},{t:"10PM",l:"high",best:false},{t:"12AM",l:"medium",best:false}]}
+    ]
+  },
+  mumbai: {
+    center:[19.076,72.877], zoom:12,
+    weather:'🌥️ Partly Cloudy · 32°C · Very High footfall risk',
+    footfall:'14,20,800',
+    events:[
+      {id:101,name:"Lalbaugcha Raja",type:"ganapati",venue:"Lalbaug, Mumbai",lat:18.9986,lng:72.8317,
+       crowd:"critical",score:98,visitors:180000,wait:"90+ min",trend:"up",stampede:true,
+       forecast:[60,72,85,92,98,99,97,94],
+       parking:[{name:"Lalbaug Market Lot",dist:"500m",status:"full"},{name:"Parel Station Lot",dist:"800m",status:"full"}],
+       alts:[102],signals:{popular:99,traffic:97,historical:99,weather:78},
+       times:[{t:"4AM",l:"low",best:true},{t:"6AM",l:"medium",best:false},{t:"9AM",l:"high",best:false},{t:"12PM",l:"critical",best:false},{t:"6PM",l:"critical",best:false},{t:"10PM",l:"critical",best:false}]},
+      {id:102,name:"Andhericha Raja",type:"ganapati",venue:"Andheri, Mumbai",lat:19.1136,lng:72.8697,
+       crowd:"high",score:75,visitors:62000,wait:"40 min",trend:"stable",stampede:false,
+       forecast:[30,42,55,65,72,75,78,70],
+       parking:[{name:"Andheri Station Lot",dist:"300m",status:"limited"},{name:"MIDC Parking",dist:"600m",status:"avail"}],
+       alts:[103],signals:{popular:77,traffic:72,historical:78,weather:78},
+       times:[{t:"6AM",l:"low",best:true},{t:"9AM",l:"medium",best:false},{t:"12PM",l:"high",best:false},{t:"6PM",l:"high",best:false},{t:"9PM",l:"critical",best:false},{t:"11PM",l:"high",best:false}]},
+      {id:103,name:"Juhu Beach Navratri",type:"navratri",venue:"Juhu Beach, Mumbai",lat:19.0987,lng:72.8268,
+       crowd:"medium",score:60,visitors:28000,wait:"20 min",trend:"stable",stampede:false,
+       forecast:[10,20,35,48,58,60,65,58],
+       parking:[{name:"Juhu Beach Lot",dist:"200m",status:"avail"},{name:"JVPD Scheme",dist:"400m",status:"avail"}],
+       alts:[],signals:{popular:62,traffic:55,historical:60,weather:78},
+       times:[{t:"6PM",l:"low",best:true},{t:"7PM",l:"medium",best:false},{t:"8PM",l:"medium",best:false},{t:"9PM",l:"high",best:false},{t:"10PM",l:"medium",best:false},{t:"11PM",l:"low",best:false}]},
+      {id:104,name:"Wankhede Stadium IPL",type:"cricket",venue:"Marine Lines, Mumbai",lat:18.9388,lng:72.8252,
+       crowd:"critical",score:92,visitors:45000,wait:"60 min",trend:"up",stampede:false,
+       forecast:[25,40,60,75,88,92,90,80],
+       parking:[{name:"Stadium Lot",dist:"100m",status:"full"},{name:"CSMT Lot",dist:"1km",status:"limited"}],
+       alts:[],signals:{popular:94,traffic:90,historical:88,weather:78},
+       times:[{t:"12PM",l:"low",best:true},{t:"2PM",l:"medium",best:false},{t:"4PM",l:"high",best:false},{t:"6PM",l:"critical",best:false},{t:"8PM",l:"critical",best:false},{t:"10PM",l:"high",best:false}]}
+    ]
+  },
+  nagpur: {
+    center:[21.145,79.088], zoom:13,
+    weather:'🌤️ Sunny · 35°C · Moderate footfall risk',
+    footfall:'2,18,600',
+    events:[
+      {id:201,name:"Tekdi Ganesh Festival",type:"ganapati",venue:"Sitabuldi, Nagpur",lat:21.1524,lng:79.0785,
+       crowd:"high",score:76,visitors:31000,wait:"35 min",trend:"up",stampede:false,
+       forecast:[25,35,50,62,72,76,78,70],
+       parking:[{name:"Sitabuldi Market Lot",dist:"200m",status:"limited"},{name:"Empress Mall Lot",dist:"500m",status:"avail"}],
+       alts:[202],signals:{popular:78,traffic:74,historical:76,weather:82},
+       times:[{t:"6AM",l:"low",best:true},{t:"9AM",l:"medium",best:false},{t:"12PM",l:"high",best:false},{t:"6PM",l:"high",best:false},{t:"9PM",l:"critical",best:false},{t:"11PM",l:"high",best:false}]},
+      {id:202,name:"Ambazari Navratri Utsav",type:"navratri",venue:"Ambazari Garden, Nagpur",lat:21.1325,lng:79.0488,
+       crowd:"medium",score:58,visitors:19000,wait:"15 min",trend:"stable",stampede:false,
+       forecast:[10,18,30,44,54,58,60,52],
+       parking:[{name:"Garden Parking",dist:"100m",status:"avail"},{name:"VCA Lot",dist:"400m",status:"avail"}],
+       alts:[],signals:{popular:60,traffic:52,historical:58,weather:82},
+       times:[{t:"6PM",l:"low",best:true},{t:"7PM",l:"medium",best:false},{t:"8PM",l:"medium",best:false},{t:"9PM",l:"high",best:false},{t:"10PM",l:"medium",best:false},{t:"11PM",l:"low",best:false}]},
+      {id:203,name:"VCA Stadium Cricket",type:"cricket",venue:"VCA Stadium, Nagpur",lat:21.1348,lng:79.0524,
+       crowd:"high",score:82,visitors:36000,wait:"40 min",trend:"up",stampede:false,
+       forecast:[20,32,50,65,76,82,80,70],
+       parking:[{name:"VCA Stadium Lot",dist:"80m",status:"full"},{name:"NMC Lot",dist:"500m",status:"limited"}],
+       alts:[],signals:{popular:84,traffic:80,historical:80,weather:82},
+       times:[{t:"12PM",l:"low",best:true},{t:"2PM",l:"medium",best:false},{t:"4PM",l:"high",best:false},{t:"6PM",l:"critical",best:false},{t:"8PM",l:"high",best:false},{t:"10PM",l:"medium",best:false}]}
+    ]
+  },
+  nashik: {
+    center:[19.997,73.789], zoom:13,
+    weather:'🌦️ Light Rain · 26°C · Low footfall risk',
+    footfall:'98,400',
+    events:[
+      {id:301,name:"Kumbh Mela Simhastha",type:"ganapati",venue:"Ramkund Ghat, Nashik",lat:20.0059,lng:73.7736,
+       crowd:"critical",score:94,visitors:120000,wait:"70+ min",trend:"up",stampede:true,
+       forecast:[40,55,70,82,90,94,96,92],
+       parking:[{name:"CBS Bus Stand Lot",dist:"600m",status:"full"},{name:"Panchavati Lot",dist:"400m",status:"limited"}],
+       alts:[302],signals:{popular:96,traffic:92,historical:94,weather:68},
+       times:[{t:"4AM",l:"low",best:true},{t:"6AM",l:"medium",best:false},{t:"9AM",l:"high",best:false},{t:"12PM",l:"critical",best:false},{t:"3PM",l:"critical",best:false},{t:"6PM",l:"high",best:false}]},
+      {id:302,name:"Trimbakeshwar Temple",type:"ganapati",venue:"Trimbak, Nashik",lat:19.9380,lng:73.5292,
+       crowd:"medium",score:62,visitors:24000,wait:"20 min",trend:"stable",stampede:false,
+       forecast:[20,28,40,52,60,62,65,58],
+       parking:[{name:"Temple Lot",dist:"150m",status:"avail"},{name:"Trimbak Road",dist:"300m",status:"avail"}],
+       alts:[],signals:{popular:64,traffic:55,historical:62,weather:68},
+       times:[{t:"6AM",l:"low",best:true},{t:"9AM",l:"low",best:false},{t:"12PM",l:"medium",best:false},{t:"3PM",l:"medium",best:false},{t:"6PM",l:"high",best:false},{t:"9PM",l:"medium",best:false}]},
+      {id:303,name:"Nashik Navratri Mahotsav",type:"navratri",venue:"Gangapur Road Grounds",lat:19.9975,lng:73.7898,
+       crowd:"low",score:38,visitors:11000,wait:"5 min",trend:"stable",stampede:false,
+       forecast:[8,14,22,30,36,38,42,35],
+       parking:[{name:"Gangapur Road Lot",dist:"200m",status:"avail"},{name:"K.K. Wagh Lot",dist:"500m",status:"avail"}],
+       alts:[],signals:{popular:40,traffic:32,historical:38,weather:68},
+       times:[{t:"6PM",l:"low",best:true},{t:"7PM",l:"low",best:false},{t:"8PM",l:"medium",best:false},{t:"9PM",l:"medium",best:false},{t:"10PM",l:"low",best:false},{t:"11PM",l:"low",best:false}]}
+    ]
+  }
+};
+
+const C={low:'#10b981',medium:'#f59e0b',high:'#ef4444',critical:'#dc2626'};
+const BG={low:'#ecfdf5',medium:'#fffbeb',high:'#fef2f2',critical:'#fde8e8'};
+const TREND_LABEL={up:'↑ Rising',stable:'→ Stable',down:'↓ Easing'};
+const TREND_CLASS={up:'trend-up',stable:'trend-stable',down:'trend-down'};
+const TREND_ICON={up:'📈',stable:'➡️',down:'📉'};
+
+let filter='all', search='', selected=null, currentView='citizen';
+let currentCity = 'pune';
+let EVENTS = CITY_DATA.pune.events;
+let mapMarkers = [];
+
+// ── CLOCK ──────────────────────────────────────────────────────
+function tick(){const d=new Date();document.getElementById('clock').textContent=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+tick(); setInterval(tick,1000);
+
+// ── MAP ────────────────────────────────────────────────────────
+const map = L.map('map',{zoomControl:false,attributionControl:false}).setView([18.527,73.855],13);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+
+function renderMapMarkers(){
+  mapMarkers.forEach(m=>map.removeLayer(m));
+  mapMarkers=[];
+  EVENTS.forEach(ev=>{
+    const c=C[ev.crowd];
+    const isLive = ev.crowd==='critical'||ev.crowd==='high';
+    const pulseCircle = isLive ? `<div style="position:absolute;inset:-10px;border-radius:50%;border:2px solid ${c};opacity:.4;animation:blink 2s infinite"></div>` : '';
+    const svg=`
+      <div style="position:relative;width:34px;height:42px">
+        ${pulseCircle}
+        <svg width="34" height="42" viewBox="0 0 34 42" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17 1C7.9 1 1 7.9 1 17c0 13 16 24 16 24S33 30 33 17C33 7.9 26.1 1 17 1z" fill="${c}" opacity=".95"/>
+          <circle cx="17" cy="17" r="8" fill="white"/>
+          <circle cx="17" cy="17" r="4.5" fill="${c}"/>
+        </svg>
+      </div>`;
+    const m = L.marker([ev.lat,ev.lng],{icon:L.divIcon({html:svg,iconSize:[34,42],iconAnchor:[17,42],popupAnchor:[0,-42],className:''})})
+      .addTo(map)
+      .bindTooltip(`<b>${ev.name}</b><br><span style="color:${c};font-weight:700">${ev.crowd.toUpperCase()}</span> · ${ev.wait} · 👥 ${ev.visitors.toLocaleString()}`,{direction:'top',offset:[0,-42]})
+      .on('click',()=>selectEv(ev.id));
+    mapMarkers.push(m);
+  });
+}
+
+renderMapMarkers();
+
+// ── LIVE SIMULATION (Fix #2) ────────────────────────────────────
+let totalLive = 682450;
+setInterval(()=>{
+  // Randomly fluctuate each live event's visitor count
+  EVENTS = EVENTS.map(ev=>{
+    if(ev.crowd==='critical'||ev.crowd==='high'){
+      const delta = Math.floor(Math.random()*120)-40;
+      return {...ev, visitors: Math.max(1000, ev.visitors+delta)};
+    }
+    if(ev.crowd==='medium'){
+      const delta = Math.floor(Math.random()*60)-20;
+      return {...ev, visitors: Math.max(500, ev.visitors+delta)};
+    }
+    return ev;
+  });
+
+  // Update total footfall counter
+  totalLive += Math.floor(Math.random()*400)-100;
+  const formatted = totalLive.toLocaleString('en-IN');
+  const fpEl = document.getElementById('mapFootfall');
+  if(fpEl){ fpEl.textContent = formatted; fpEl.classList.add('num-pulse'); setTimeout(()=>fpEl.classList.remove('num-pulse'),600); }
+  document.getElementById('totalVisitors').textContent = (totalLive/100000).toFixed(1)+'L';
+
+  // Update selected event detail if open
+  if(selected && currentView==='citizen'){
+    const ev = EVENTS.find(e=>e.id===selected);
+    if(ev) {
+      const scoreEl = document.querySelector('.score-num');
+      if(scoreEl){ scoreEl.classList.add('num-pulse'); setTimeout(()=>scoreEl.classList.remove('num-pulse'),500); }
+    }
+  }
+
+  // Re-render event list cards (visitor counts)
+  renderList();
+  renderMapMarkers();
+}, 4000);
+
+// ── TICKER ─────────────────────────────────────────────────────
+const tickerMessages = {
+  pune:['Dagdusheth: 96 · Kasba: 91 · Holi KP: 88','⚠ Stampede risk at Dagdusheth — alt routes active','Balewadi Navratri: Low crowd — best time now!','Kasba Ganpati wait time: 60+ min'],
+  mumbai:['Lalbaugcha Raja: 98 · CRITICAL — avoid peak hours','Wankhede IPL: Crowd rising fast ↑','Juhu Navratri: Medium — good time to visit','⚠ Lalbaugcha stampede protocol activated'],
+  nagpur:['Tekdi Ganesh: 76 · High · Wait 35min','VCA Cricket: Crowd rising ↑','Ambazari Navratri: Medium — comfortable visit','Nagpur city footfall within safe limits'],
+  nashik:['Kumbh Simhastha: 94 · CRITICAL','Trimbakeshwar: Medium — manageable crowds','Nashik Navratri: Low crowd — ideal time','⚠ Ramkund Ghat: Avoid 10AM–4PM']
+};
+let tickerIdx=0;
+function rotateTicker(){
+  const msgs = tickerMessages[currentCity]||tickerMessages.pune;
+  document.getElementById('tickerText').textContent = msgs[tickerIdx%msgs.length];
+  tickerIdx++;
+}
+rotateTicker();
+setInterval(rotateTicker, 3500);
+
+// ── LIST ───────────────────────────────────────────────────────
+function renderList(){
+  const list=EVENTS.filter(e=>(filter==='all'||e.type===filter)&&(e.name.toLowerCase().includes(search)||e.venue.toLowerCase().includes(search)));
+  document.getElementById('eventList').innerHTML=list.map(ev=>`
+    <div class="event-card ${selected===ev.id?'active':''}" onclick="selectEv(${ev.id})">
+      <div class="ec-top">
+        <div><div class="ec-name">${ev.name}</div><div class="ec-venue">📍 ${ev.venue}</div></div>
+        <div class="badge ${ev.crowd}">${ev.crowd}</div>
+      </div>
+      <div class="ec-footer">
+        <div class="ec-score">Score: <b style="color:${C[ev.crowd]}">${ev.score}/100</b></div>
+        <div class="ec-visitors">👥 ${ev.visitors.toLocaleString()}</div>
+        <div class="ec-trend" style="color:${ev.trend==='up'?C.high:ev.trend==='down'?C.low:C.medium}">${TREND_LABEL[ev.trend]}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── SELECT ─────────────────────────────────────────────────────
+function selectEv(id){
+  selected=id;
+  const ev=EVENTS.find(e=>e.id===id);
+  renderList();
+  map.flyTo([ev.lat,ev.lng],15,{duration:0.8});
+  if(currentView==='citizen') renderDetail(ev);
+  else if(currentView==='organizer') renderOrganizer(ev);
+}
+
+// ── DETAIL ─────────────────────────────────────────────────────
+function renderDetail(ev){
+  const c=C[ev.crowd], circ=2*Math.PI*29, fill=(ev.score/100)*circ;
+  const isReligious=RELIGIOUS_TYPES.includes(ev.type);
+  const maxF=Math.max(...ev.forecast);
+  const fcBars=ev.forecast.map((v,i)=>{
+    const col=v>80?C.critical:v>60?C.high:v>40?C.medium:C.low;
+    const isNow=i===Math.floor(ev.forecast.length/2);
+    return `<div class="fc-col">
+      <div class="fc-bar" style="height:${(v/maxF)*100}%;background:${col}${isNow?';outline:2px solid '+col+';outline-offset:2px':''}"></div>
+      <div class="${isNow?'fc-now':'fc-lbl'}">${isNow?'NOW':['-4h','-3h','-2h','-1h','NOW','+1h','+2h','+3h'][i]}</div>
+    </div>`;
+  }).join('');
+
+  const stampedeHTML=ev.stampede?`
+    <div class="stampede-alert">
+      <div class="stampede-icon">🚨</div>
+      <div><div class="stampede-title">Stampede Risk Alert</div>
+        <div class="stampede-msg">Crowd density approaching unsafe levels. Authorities notified. Visit before 8AM or after 10PM.</div>
+      </div>
+    </div>`:'';
+
+  const altsHTML = isReligious && ev.alts.length
+    ? ev.alts.map(aid=>{const a=EVENTS.find(e=>e.id===aid);if(!a)return'';return`
+      <div class="alt-item" onclick="selectEv(${a.id})">
+        <div><div class="alt-name">${a.name}</div><div class="alt-venue">${a.venue}</div></div>
+        <div class="badge ${a.crowd}">${a.crowd}</div>
+      </div>`;}).join('')
+    : isReligious ? '<div style="font-size:12px;color:var(--muted)">No alternatives nearby</div>' : null;
+
+  document.getElementById('rightPanel').innerHTML=`
+    <div class="rp-sec">
+      <div class="rp-lbl">📍 ${ev.name}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:500">${ev.venue}</div>
+      ${stampedeHTML}
+      <div class="score-block">
+        <div class="score-ring">
+          <svg width="68" height="68" viewBox="0 0 68 68">
+            <circle cx="34" cy="34" r="29" fill="none" stroke="${BG[ev.crowd]}" stroke-width="7"/>
+            <circle cx="34" cy="34" r="29" fill="none" stroke="${c}" stroke-width="7" stroke-dasharray="${fill} ${circ-fill}" stroke-linecap="round"/>
+          </svg>
+          <div class="score-num" style="color:${c}">${ev.score}</div>
+        </div>
+        <div>
+          <div class="score-level" style="color:${c}">${ev.crowd.toUpperCase()}</div>
+          <div class="score-sub">⏱ Wait: ${ev.wait}</div>
+          <div class="score-sub">👥 ${ev.visitors.toLocaleString()} visitors</div>
+          <div class="trend-badge ${TREND_CLASS[ev.trend]}">${TREND_ICON[ev.trend]} ${TREND_LABEL[ev.trend]}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIX 1: AI MODEL PANEL -->
+    <div class="rp-sec">
+      <div class="rp-lbl">🤖 AI Prediction Engine</div>
+      <div class="ai-panel">
+        <div class="ai-panel-title">⚡ XGBoost Crowd Model</div>
+        <div class="ai-model-row"><span class="ai-model-name">Model Accuracy</span><span class="ai-model-val">89.2%</span></div>
+        <div class="ai-acc-bar"><div class="ai-acc-fill" style="width:89%"></div></div>
+        <div class="ai-model-row"><span class="ai-model-name">Confidence</span><span class="ai-model-val">${Math.min(99,ev.score+3)}%</span></div>
+        <div class="ai-model-row"><span class="ai-model-name">Training Data</span><span class="ai-model-val">3 Yrs · 1.2M rows</span></div>
+        <div class="ai-model-row"><span class="ai-model-name">Last Updated</span><span class="ai-model-val">2 min ago</span></div>
+        <div style="font-size:9px;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:.8px;margin:8px 0 5px">Data Sources</div>
+        <div class="ai-sources">
+          <span class="ai-src">📍 GPS Mobility</span>
+          <span class="ai-src">📸 CCTV Density</span>
+          <span class="ai-src">🚗 Traffic API</span>
+          <span class="ai-src">🌦️ Weather</span>
+          <span class="ai-src">📅 Historical</span>
+          <span class="ai-src">📱 Social Signals</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rp-sec">
+      <div class="rp-lbl">2-Hour Crowd Forecast</div>
+      <div class="forecast-bar">${fcBars}</div>
+      <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:2px">AI-predicted crowd level — recalculates every 30 min</div>
+    </div>
+
+    <div class="rp-sec">
+      <div class="rp-lbl">Prediction Signals</div>
+      ${[['Popular Times (45%)',ev.signals.popular,c],['Road Congestion (25%)',ev.signals.traffic,c],['Historical Pattern (20%)',ev.signals.historical,c],['Weather Score (10%)',ev.signals.weather,'#3b6ef0']]
+        .map(([n,v,col])=>`<div class="sig-row"><div class="sig-name">${n}</div><div class="sig-track"><div class="sig-fill" style="width:${v}%;background:${col}"></div></div><div class="sig-val">${v}</div></div>`).join('')}
+    </div>
+
+    <div class="rp-sec">
+      <div class="rp-lbl">Best Time to Visit</div>
+      <div class="time-grid">${ev.times.map(t=>`<div class="time-slot ${t.best?'best':''}"><div class="ts-t">${t.t}</div><div class="ts-l" style="color:${C[t.l]}">${t.l}</div>${t.best?'<div class="ts-tag">✓ BEST</div>':''}</div>`).join('')}</div>
+    </div>
+
+    <div class="rp-sec">
+      <div class="rp-lbl">Parking Nearby</div>
+      ${ev.parking.map(p=>`<div class="park-item"><div><div class="park-name">${p.name}</div><div class="park-dist">🚶 ${p.dist}</div></div><div class="park-tag ${p.status}">${p.status.toUpperCase()}</div></div>`).join('')}
+    </div>
+
+    ${altsHTML !== null ? `<div class="rp-sec"><div class="rp-lbl">Visit a Less Crowded Pandal Instead</div>${altsHTML}</div>` : ''}
+  `;
+}
+
+// ── AUTHORITY ──────────────────────────────────────────────────
+function renderAuthority(){
+  const critCount = EVENTS.filter(e=>e.crowd==='critical').length;
+  const highCount = EVENTS.filter(e=>e.crowd==='high').length;
+  const totalV = EVENTS.reduce((a,e)=>a+e.visitors,0);
+  document.getElementById('rightPanel').innerHTML=`
+    <div class="rp-sec">
+      <div class="rp-lbl">City Overview · Right Now</div>
+      <div class="stat-row" style="margin-bottom:0">
+        <div class="stat-card"><div class="stat-num" style="color:var(--critical)">${critCount}</div><div class="stat-lbl">Critical Zones</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:var(--medium)">${highCount}</div><div class="stat-lbl">High Zones</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:var(--low)">${EVENTS.length}</div><div class="stat-lbl">Active Events</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:var(--accent)">${(totalV/100000).toFixed(1)}L</div><div class="stat-lbl">Est. Footfall</div></div>
+      </div>
+    </div>
+    <div class="rp-sec">
+      <div class="rp-lbl">🤖 AI Authority Alerts</div>
+      ${EVENTS.filter(e=>e.stampede).map(e=>`
+      <div class="alert-card"><div class="al-top"><div class="al-loc">${e.name}</div><div class="al-time">CRITICAL · AI Score ${e.score}</div></div>
+        <div class="al-msg">XGBoost model flagged stampede risk. Crowd at ${e.score}/100. Historical pattern match: 3.2× normal day.</div>
+        <div class="al-action">→ Activate alternate gate. Deploy medical team. Extra bus route on standby.</div>
+      </div>`).join('')}
+      ${EVENTS.filter(e=>e.crowd==='critical'&&!e.stampede).map(e=>`
+      <div class="alert-card"><div class="al-top"><div class="al-loc">${e.name}</div><div class="al-time">CRITICAL · ${e.wait}</div></div>
+        <div class="al-msg">Crowd rising fast — ${e.visitors.toLocaleString()} visitors. AI predicts peak in next 90 min.</div>
+        <div class="al-action">→ Pre-position 4 personnel at entry. Close vehicle access in 500m radius.</div>
+      </div>`).join('')}
+      ${EVENTS.filter(e=>e.crowd==='high').slice(0,2).map(e=>`
+      <div class="alert-card watch"><div class="al-top"><div class="al-loc">${e.name}</div><div class="al-time">WATCH · Score ${e.score}</div></div>
+        <div class="al-msg">Crowd rising steadily. ${e.visitors.toLocaleString()} visitors currently.</div>
+        <div class="al-action">→ Monitor. Pre-position 2 traffic personnel.</div>
+      </div>`).join('')}
+      <div class="alert-card clear"><div class="al-top"><div class="al-loc">Low Crowd Venues</div><div class="al-time">CLEAR</div></div>
+        <div class="al-msg">${EVENTS.filter(e=>e.crowd==='low').map(e=>e.name).join(', ')} — No action needed.</div></div>
+    </div>
+    <div class="rp-sec">
+      <div class="rp-lbl">Manual Override</div>
+      <div class="override-box">
+        <div class="ov-title">⚡ Add Authority Intel</div>
+        <textarea class="ov-input" rows="3" placeholder="e.g. Road closure on Laxmi Road from 6PM — reroute to Bajirao..."></textarea>
+        <button class="ov-btn" onclick="showToast('✅ Override submitted. AI engine recalibrating with new data...')">Submit Override</button>
+      </div>
+    </div>`;
+}
+
+// ── ORGANIZER ──────────────────────────────────────────────────
+function renderOrganizer(ev){
+  if(!ev) ev = selected ? EVENTS.find(e=>e.id===selected) : null;
+  if(!ev){
+    document.getElementById('rightPanel').innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Select an Event</div><div class="empty-msg">Select an event to see organizer analytics, footfall forecast, and resource stress.</div></div>';
+    return;
+  }
+  const data=ev.forecast;
+  const maxD=Math.max(...data);
+  const cols=data.map(v=>v>80?C.critical:v>60?C.high:v>40?C.medium:C.low);
+  const s=ev.score;
+  const parkPct=Math.min(98,Math.round(s*0.95));
+  const queuePct=Math.min(95,Math.round(s*0.82));
+  const staffPct=Math.min(90,Math.round(s*0.68));
+  const medPct=Math.max(30,Math.round(100-s*0.55));
+  const parkC=parkPct>80?C.high:parkPct>60?C.medium:C.low;
+  const queueC=queuePct>80?C.high:queuePct>60?C.medium:C.low;
+  const staffC=staffPct>80?C.high:staffPct>60?C.medium:C.low;
+  const peakSlot=ev.times.find(t=>t.l==='critical')||ev.times.find(t=>t.l==='high')||ev.times[ev.times.length-1];
+  document.getElementById('rightPanel').innerHTML=`
+    <div class="rp-sec">
+      <div class="rp-lbl">${ev.name} · AI Footfall Forecast</div>
+      <div class="chart-bars">${data.map((v,i)=>{const isNow=i===Math.floor(data.length/2);return`<div class="bc"><div class="bf" style="height:${(v/maxD)*100}%;background:${cols[i]}${isNow?';outline:2px solid '+cols[i]+';outline-offset:1px':''}"></div><div class="${isNow?'fc-now':'bl'}">${isNow?'NOW':['-4h','-3h','-2h','-1h','NOW','+1h','+2h','+3h'][i]||''}</div></div>`;}).join('')}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:10px;color:var(--muted)">Earlier</span><span style="font-size:10px;color:var(--muted)">Later</span></div>
+      <div style="margin-top:8px;background:#f0fdf4;border:1px solid #a7f3d0;border-radius:8px;padding:8px 10px;font-size:11px;color:#065f46;font-weight:600">
+        🤖 AI Tip: Peak crowd at ${peakSlot?.t||'evening'}. Staff should be fully deployed 30 min prior.
+      </div>
+    </div>
+    <div class="rp-sec">
+      <div class="rp-lbl">Resource Stress</div>
+      ${[['Parking',parkPct,parkC],['Entry Queue',queuePct,queueC],['Staff Load',staffPct,staffC],['Medical Cover',medPct,C.low]].map(([n,v,c])=>`
+      <div class="meter-row"><div class="meter-name">${n}</div><div class="meter-track"><div class="meter-fill" style="width:${v}%;background:${c}"></div></div><div class="meter-pct" style="color:${c}">${v}%</div></div>`).join('')}
+    </div>
+    <div class="rp-sec">
+      <div class="rp-lbl">FlowCity AI Suggestions</div>
+      ${peakSlot?`<div class="alert-card info"><div class="al-msg">⏰ Peak crowd expected around <b>${peakSlot.t}</b>. All staff in position 30 min prior.</div></div>`:''}
+      ${ev.parking.some(p=>p.status==='full')?`<div class="alert-card info"><div class="al-msg">🚗 ${ev.parking.find(p=>p.status==='full').name} is FULL. Redirect overflow to ${ev.parking.find(p=>p.status!=='full')?.name||'alternate lots'}.</div></div>`:''}
+      ${ev.stampede?`<div class="alert-card" style="border-left-color:var(--critical)"><div class="al-msg">🚨 Stampede risk detected by AI. Activate crowd control protocol immediately.</div></div>`:''}
+      <div class="alert-card info"><div class="al-msg">🚑 Pre-position ambulance at nearest access point 30 min before peak hour.</div></div>
+    </div>`;
+}
+
+// ── CITY SWITCHER (Fix #3 — actually works now) ────────────────
+function changeCity(city){
+  currentCity = city;
+  const data = CITY_DATA[city];
+  const names={pune:'Pune',mumbai:'Mumbai',nagpur:'Nagpur',nashik:'Nashik'};
+
+  // Load new events
+  EVENTS = data.events;
+  selected = null;
+  filter = 'all';
+  search = '';
+  document.getElementById('searchBox').value = '';
+
+  // Update map
+  map.flyTo(data.center, data.zoom, {duration:1.2});
+  renderMapMarkers();
+
+  // Update weather
+  document.getElementById('weatherPill').textContent = data.weather;
+
+  // Update footfall
+  document.getElementById('mapFootfall').textContent = data.footfall;
+
+  // Update sidebar title
+  document.getElementById('sbTitle').textContent = `Events & Pandals — ${names[city]}`;
+
+  // Re-render chips (filter reset)
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  document.querySelector('.chip').classList.add('active');
+
+  // Re-render list
+  renderList();
+
+  // Reset right panel
+  if(currentView==='authority') renderAuthority();
+  else document.getElementById('rightPanel').innerHTML=`<div class="empty"><div class="empty-icon">📍</div><div class="empty-title">Select an Event</div><div class="empty-msg">Tap any event on the left or a pin on the map to see live crowd prediction, 2-hour forecast, and parking.</div></div>`;
+
+  showToast(`✅ Switched to ${names[city]} — ${data.events.length} events loaded`);
+}
+
+// ── VIEW SWITCHING ─────────────────────────────────────────────
+function setView(v,btn){
+  currentView=v;
+  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(v==='citizen'){
+    if(selected)renderDetail(EVENTS.find(e=>e.id===selected));
+    else document.getElementById('rightPanel').innerHTML='<div class="empty"><div class="empty-icon">📍</div><div class="empty-title">Select an Event</div><div class="empty-msg">Tap any event on the left or a pin on the map to see live crowd prediction, 2-hour forecast, and parking.</div></div>';
+  } else if(v==='authority') renderAuthority();
+  else renderOrganizer(null);
+}
+
+function setFilter(f,btn){
+  filter=f;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  renderList();
+}
+function filterSearch(v){search=v.toLowerCase();renderList();}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+// ── INIT ───────────────────────────────────────────────────────
+renderList();
+setTimeout(()=>selectEv(3),400);
+</script>
+</body>
+</html>
